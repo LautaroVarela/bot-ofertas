@@ -1,19 +1,17 @@
+import telebot
 import requests
 from bs4 import BeautifulSoup
-from telegram import Bot
 import time
 import urllib.parse
 
-# === CONFIGURACIÓN ===
-TELEGRAM_TOKEN = "7989897637:AAHokAnLsUGvZ1KBuTUIOTD5pou9HgPZnvM"
+# Config
+TELEGRAM_TOKEN = "TOKEN"
 CHAT_ID = 5107123707
 PALABRAS_CLAVE = [
     "analista", "analista qa", "qa manual", "analista funcional",
     "qa funcional", "soporte mesa de ayuda", "especialista en procesos it",
     "help desk", "it support", "software tester", "qa tester", "qa engineer"
 ]
-
-# === FUENTES DE EMPLEOS ===
 PORTALES = {
     "Bumeran": "https://www.bumeran.com.ar/empleos-busqueda-qa.html",
     "Computrabajo": "https://ar.computrabajo.com/trabajo-de-qa",
@@ -22,9 +20,8 @@ PORTALES = {
     "LinkedIn": "https://www.linkedin.com/jobs/search?keywords=qa&location=Argentina&f_TPR=r86400&sortBy=DD"
 }
 
-# === BOT TELEGRAM ===
-bot = Bot(token=TELEGRAM_TOKEN)
-vistos = set()  # Guarda enlaces ya enviados
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
+vistos = set()
 
 def buscar_ofertas():
     nuevas = []
@@ -40,31 +37,25 @@ def buscar_ofertas():
                 titulo = link.get_text().strip().lower()
                 href = link["href"]
 
-                # Completar URL si es relativa
                 if href.startswith("/"):
                     href = urllib.parse.urljoin(url, href)
 
-                # Filtrar por palabras clave
                 if any(palabra in titulo for palabra in PALABRAS_CLAVE):
                     if href not in vistos and "http" in href:
                         vistos.add(href)
-                        nuevas.append(f"[{titulo}]({href})")
+                        nuevas.append(f"{titulo}\n{href}")
 
         except Exception as e:
             print(f"Error en {nombre}: {e}")
     return nuevas
 
-def enviar_mensajes(ofertas):
-    for oferta in ofertas:
-        try:
-            bot.send_message(chat_id=CHAT_ID, text=oferta, parse_mode="Markdown")
-        except Exception as e:
-            print(f"Error enviando mensaje: {e}")
-
 if __name__ == "__main__":
     print("Bot iniciado. Buscando ofertas cada 5 minutos...")
     while True:
         ofertas = buscar_ofertas()
-        if ofertas:
-            enviar_mensajes(ofertas)
-        time.sleep(300)  # Espera 5 minutos
+        for oferta in ofertas:
+            try:
+                bot.send_message(CHAT_ID, oferta)
+            except Exception as e:
+                print(f"Error enviando mensaje: {e}")
+        time.sleep(300)
