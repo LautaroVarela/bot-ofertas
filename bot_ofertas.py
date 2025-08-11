@@ -1,47 +1,62 @@
 import os
+import time
+import telebot
 import requests
-from flask import Flask, request
+from bs4 import BeautifulSoup
 
-TOKEN = "7989897637:AAHokAnLsUGvZ1KBuTUIOTD5pou9HgPZnvM"
-CHAT_ID = "5107123707"
-WEBHOOK_URL = f"https://{os.environ.get('RAILWAY_STATIC_URL')}/webhook"
+# Variables desde Railway (o directo para pruebas locales)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "TU_TOKEN_AQUI")
+CHAT_ID = int(os.getenv("CHAT_ID", "5107123707"))
 
-app = Flask(__name__)
+# Inicializar bot
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# Configuración inicial del webhook
-def set_webhook():
-    url = f"https://api.telegram.org/bot{TOKEN}/setWebhook"
-    data = {"url": WEBHOOK_URL}
-    r = requests.post(url, data=data)
-    print("Webhook set:", r.json())
+# Palabras clave para filtrar
+KEYWORDS = [
+    "remoto",
+    "junior",
+    "it",
+    "analista qa",
+    "qa manual",
+    "quality assurance",
+    "testing"
+]
 
-# Enviar mensaje a tu chat
-def send_message(text):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": text}
-    requests.post(url, data=data)
+# Lista para guardar ofertas enviadas y evitar duplicados
+sent_offers = set()
 
-# Endpoint del webhook
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    update = request.get_json()
+# URL de ejemplo (reemplazar por tu fuente real de ofertas)
+URL = "https://www.computrabajo.com.ar/trabajo-de-it-sistemas"
 
-    if "message" in update:
-        chat_id = update["message"]["chat"]["id"]
-        text = update["message"].get("text", "")
+def fetch_offers():
+    """Obtiene ofertas desde la web"""
+    try:
+        response = requests.get(URL, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        offers = []
 
-        if text.lower() == "/start":
-            send_message("Bot de ofertas iniciado ✅")
-        else:
-            send_message(f"Recibí tu mensaje: {text}")
+        for link in soup.find_all("a", href=True):
+            title = link.get_text(strip=True).lower()
+            href = link["href"]
+            if any(keyword in title for keyword in KEYWORDS):
+                full_url = href if href.startswith("http") else "https://www.computrabajo.com.ar" + href
+                offers.append((title, full_url))
 
-    return "OK", 200
+        return offers
+    except Exception as e:
+        print(f"Error al obtener ofertas: {e}")
+        return []
 
-@app.route("/")
-def home():
-    return "Bot de ofertas activo ✅"
+def send_new_offers():
+    """Envía ofertas nuevas a Telegram"""
+    offers = fetch_offers()
+    for title, url in offers:
+        if url not in sent_offers:
+            sent_offers.add(url)
+            bot.send_message(CHAT_ID, f"🆕 {title}\n{url}")
 
 if __name__ == "__main__":
-    set_webhook()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    print("🤖 Bot iniciado, buscando ofertas cada 5 minutos...")
+    while True:
+        send_new_offers()
+        time.sleep(300)  # 5 minutos
