@@ -1,1 +1,1 @@
-worker: python bot_ofertas.py
+web: python main.py
